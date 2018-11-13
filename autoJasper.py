@@ -6,6 +6,8 @@ import os
 import in_place
 import shutil
 import urllib.request
+import zipfile
+
 
 def findgitlink(url, identifier):
     links = linkGrabber.Links(url)
@@ -76,18 +78,19 @@ for link in cve.id(cve_id_input)['references']:
         break
 
 
-if(not is_link_found):
+if not is_link_found:
     print('Link not found on cve, scraping the rest of the links')
     for link in cve.id(cve_id_input)['references']:
-        git_link = findgitlink(link,'https://github.com/mdadams/jasper/commit')
+        git_link = findgitlink(link, 'https://github.com/mdadams/jasper/commit')
 
         if not is_issue_link_found :
-            git_issue_link = findgitlink(link,'https://github.com/mdadams/jasper/issues')
+            git_issue_link = findgitlink(link, 'https://github.com/mdadams/jasper/issues')
 
         if git_link != '' and git_link is not None and git_issue_link != '' and git_issue_link is not None:
             break
 
-if(git_link is None):
+
+if git_link is None:
     print('The git commit was not found on the cve, cant proceed')
 
 
@@ -119,8 +122,8 @@ else:
 if not os.path.exists(directory):
     os.makedirs(directory)
 
-if len(os.listdir(directory) ) == 0:
-    repo = Repo.clone_from(url="https://github.com/mdadams/jasper.git",to_path="C:\LabWork"+"\\"+parent_sha)
+if len(os.listdir(directory)) == 0:
+    repo = Repo.clone_from(url="https://github.com/mdadams/jasper.git", to_path="C:\LabWork"+"\\"+parent_sha)
     print("Repository cloned")
     print("Checking out to the wanted commit")
     repo.git.checkout(parent_sha)
@@ -128,7 +131,7 @@ else:
     print("Repository is already cloned, proceeding")
 
 
-if git_issue_download_link =='' or git_issue_download_link is None:
+if git_issue_download_link == '' or git_issue_download_link is None:
     print("can't find issue download link, cant proceed.")
 else:
     download_path = "C:\\LabWork\\"+parent_sha+"\\reproducer.zip"
@@ -136,26 +139,44 @@ else:
         data = response.read()  # a `bytes` object
         out_file.write(data)
 
+    with zipfile.ZipFile(download_path, "r") as z:
+        z.extractall("C:\\LabWork\\"+parent_sha)
+
+    with zipfile.ZipFile(download_path, 'r') as f:
+        names = f.namelist()
+
+
+if not names is None :
+    for name in names :
+        if name.startswith("jasper"):
+            reproducer_name = name
+            break
+
+
 filename1 = "C:\LabWork\\"+parent_sha+"\\src\libjasper\include\jasper"
 filename2 = "C:\LabWork\\"+parent_sha+"\\src\libjasper\\base"
-replace(filename1,"#include <jasper/jas_config.h>","#include <jasper/jas_config.h.in>")
-replace(filename1,'#include "jasper/jas_config.h"','#include "jasper/jas_config.h.in"')
-replace(filename2,"#include <jasper/jas_config.h>","#include <jasper/jas_config.h.in>")
-replace(filename2,'#include "jasper/jas_config.h"','#include "jasper/jas_config.h.in"')
-replace(filename2,'#include <math.h>','#include <jas_math.h>')
+replace(filename1, "#include <jasper/jas_config.h>", "#include <jasper/jas_config.h.in>")
+replace(filename1, '#include "jasper/jas_config.h"', '#include "jasper/jas_config.h.in"')
+replace(filename2, "#include <jasper/jas_config.h>", "#include <jasper/jas_config.h.in>")
+replace(filename2, '#include "jasper/jas_config.h"', '#include "jasper/jas_config.h.in"')
+replace(filename2, '#include <math.h>', '#include <jas_math.h>')
 
-src = r"C:\LabWork\jasperInclude\include";
-dst = "C:\\LabWork\\"+parent_sha+"\\src\\libjasper\\include\\jasper";
+src = r"C:\LabWork\jasperInclude\include"
+dst = "C:\\LabWork\\"+parent_sha+"\\src\\libjasper\\include\\jasper"
 
 filename = "jas_math.h"
 shutil.copy(os.path.join(src, filename), os.path.join(dst, filename))
 
 path = directory+"\src\msvc\jasper.dsw"
-command = "start /wait cmd /c Devenv "+ path +" /upgrade"
+command = "start /wait cmd /c Devenv " + path + " /upgrade"
 os.system(command)
 path = directory+"\src\msvc\libjasper.dsp"
-command = "start /wait cmd /c Devenv "+path+" /build Release"
+command = "start /wait cmd /c Devenv " + path + " /build Release"
 os.system(command)
 
-
-
+script_path = "C:\\LabWork\\reproduce_script.txt"
+program_path = "C:\\LabWork\\" + parent_sha + "\\src\\msvc\\Win32_Release"
+command_arg = "-f"
+program_exploit_path = "C:\\LabWork\\" + parent_sha + "\\" + reproducer_name
+command = 'start /wait cmd /c cdb "$$>a<' + script_path + '" ' + program_path + ' ' + command_arg + ' ' + program_exploit_path
+os.system(command)
